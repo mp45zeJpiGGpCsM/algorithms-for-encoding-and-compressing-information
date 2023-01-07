@@ -1,0 +1,184 @@
+#include <iostream>
+#include <string>
+#include <fstream>
+#include <queue>
+#include <unordered_map>
+using namespace std;
+//узел дерева
+class Node {
+public:
+	char ch; // Символ текста
+	int fr; // Частота символа
+ Node *left, *right; // Указатели на последователей
+};
+
+// Выделение нового узла
+Node* newNode(char ch, int fr, Node *left, Node *right) {
+ Node* node = new Node(); // Выделяем память под новый узел
+	// Заполняем её соотв. элементами
+ node->ch = ch;
+ node->fr = fr;
+ node->left = left;
+ node->right = right;
+	return node;
+}
+
+
+// comp(kомпаратор), используемый для приоритетной очереди
+class comp {
+public:
+	bool operator()(Node* left, Node* right) {
+		// Переопределяем предикат сравнения (для сравнения частоты)
+		return left->fr > right->fr;
+	}
+};
+
+// Кодируем, проходясь по сформированному дереву
+void encode(Node* root, string str, unordered_map <char, string> &bukv) {
+ 	if (root == nullptr) {return;}	// Проверяем, существует ли вершина
+	
+	// Если нашли узел без последователей, записываем символ в алфавит 
+	if (!root->left && !root->right) {
+		bukv[root->ch] = str;
+	}
+	// Рекурсивно проходим по ветвям дерева ,начиная с левых, дописывая в формируемый код символа соотв. значения
+	encode(root->left, str + "0", bukv);
+	encode(root->right, str + "1", bukv);
+}
+// Декодируем
+void decode(string text, unordered_map <string, char> &bukv) {
+	ofstream file_out("out.txt");	// Открываем файл для записи
+	string tmp = "";
+	// Посимвольно считываем данные из закодированного текста
+	for (char ch: text) {
+		tmp += ch;
+		// Проверяем, существует ли в алфавите элемент с таким ключом
+		if (bukv.find(tmp) != bukv.end()) {
+			file_out << bukv[tmp];
+			tmp = "";
+		}
+	}
+	file_out.close();
+}
+
+// Дерево Хаффмана
+void HuffmanTree(string text) {
+	ofstream file_codes("bukv.txt"), file_coded("encoded.txt");
+	// map для сохранения частоты символов
+	unordered_map <char, int> fr;
+
+	// Подсчитываем частоту символов (циклом ranged-based for)
+	for (char ch: text) {
+		fr[ch]++;
+	}
+
+	// Очередь с приоритетами
+	priority_queue <Node*, vector<Node*>, comp> pr_q;
+
+	// Создадим узлы бинарного дерева для каждого знака и добавим их в очередь, используя частоту в качестве приоритета
+	for (auto pair: fr) {
+		// Добавляем элемент в очередь с приоритетами на основе приоритета элемента из comp
+		pr_q.push(newNode(pair.first, pair.second, nullptr, nullptr));
+	}
+
+	// Связывание узлов
+	while (pr_q.size() > 1)	{
+		// Удаляем из очереди два узла с наивысшим приоритетом        
+    //сохраняя указатели на удаляемые узлы
+		Node *left = pr_q.top();
+		pr_q.pop();
+		Node *right = pr_q.top();
+		pr_q.pop();
+		
+		// Создаваём новый узел дерева, в котором они оба будут потомками
+		// Приоритет нового узла будет равен сумме их приоритетов
+		int sum = left->fr + right->fr;
+		// Добавим получившийся узел обратно в очередь (в качестве символа передаём нулевой символ)
+		pr_q.push(newNode('\0', sum, left, right));
+	}
+
+	// Сохраним указатель на вершину (корень) дерева
+	Node *root = pr_q.top();
+	
+	// map для сохранения кодов символов 
+	unordered_map <char, string> bukv;
+	
+	// Выполняем кодирование текста
+	encode(root, "", bukv);
+	
+	// Выводим закодированный текст
+	string str = "";
+	for (char ch: text) {
+		str += bukv[ch];
+	}
+	file_coded << str;
+	cout << "было трудно, но я закодировал ваш файл :)"<<endl;
+
+	// Сохраним вид нашего алфавита в файл bukv 
+	for (auto pair: bukv) {
+		file_codes << pair.first << " " << pair.second << '\n';	// Обращаемся к первому и второму полю bukv соответственно
+	}	
+	file_codes.close(), file_coded.close();	
+}
+
+int main() {
+	string text, tmp;
+  int did;
+	ifstream file_in("in.txt");	// Открываем файл для чтения
+	
+	cout << "Вы хотите кодировать(1) или декодировать(0) ваш файл?"<<endl;
+	cin >> did;
+	// Пока не достигли конца файла, построчно считываем данные
+	while (!file_in.eof()) {
+		getline(file_in, tmp);	// Т.к. функция getline() считывает до символа конца строки,
+		text += tmp + '\n';	// Не включая их, дополняем текст элементом "\n" 
+	};
+	file_in.close();	
+	text.pop_back();	// Исключаем лишний символ конца строки (\n)
+	// Выполняем кодирование
+	if (did == 1) {
+		HuffmanTree(text);
+	}
+	// Выполняем декодирование
+	else if (did == 0) {
+		ifstream file_codes("bukv.txt");
+		// map для сохранения символов (коды символов передаём в качетсве ключа)
+		unordered_map <string, char> bukv;
+
+		char ch = ' ';
+		string code, buffer;
+		// Заполняем map данными из файла-bukv
+		while (!file_codes.eof()) {
+			code = "";
+			getline(file_codes, buffer);
+			bool flag = true;
+			for (auto i: buffer) {
+				if (flag) {
+					ch = i;
+					flag = false;
+				}
+				else if (!flag && i != ' ') {
+					code += i;
+				}
+			}
+			// Обработка символа новой строки (\n)
+			if (code == "") {
+				ch = '\n';
+				getline(file_codes, buffer);
+				for (auto i: buffer) {
+					if (i != ' ') {
+						code += i;
+					}
+				}
+			}
+			if (code != "") {
+				bukv[code] = ch;
+			}
+		}
+		file_codes.close();	
+		// Выполняем декодирование текста
+		decode(text, bukv);
+		cout << "фухх, я декодировал ваш файл;)";
+	}  
+  return 0;
+}
