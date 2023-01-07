@@ -1,0 +1,3 @@
+Fraps is a universal Windows application that can be used with games using DirectX or OpenGL graphic technology. In its current form Fraps performs many tasks and can best be described as:
+
+Benchmarking Software - Show how many Frames Per Second (FPS) you are getting in a corner of your screen. Perform custom benchmarks and measure the frame rate between any two points. Save the statistics out to disk and use them for your own reviews and applications.
