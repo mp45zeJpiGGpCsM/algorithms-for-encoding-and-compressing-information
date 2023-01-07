@@ -4,6 +4,7 @@
 #include <queue>
 #include <unordered_map>
 using namespace std;
+
 //узел дерева
 class Node {
 public:
@@ -28,7 +29,7 @@ Node* newNode(char ch, int fr, Node *left, Node *right) {
 class comp {
 public:
 	bool operator()(Node* left, Node* right) {
-		// Переопределяем предикат сравнения (для сравнения частоты)
+		// Переопределяем предикат сравнения для сравнения частоты
 		return left->fr > right->fr;
 	}
 };
@@ -93,11 +94,11 @@ void HuffmanTree(string text) {
 		// Создаваём новый узел дерева, в котором они оба будут потомками
 		// Приоритет нового узла будет равен сумме их приоритетов
 		int sum = left->fr + right->fr;
-		// Добавим получившийся узел обратно в очередь (в качестве символа передаём нулевой символ)
+		// Добавим получившийся узел обратно в очередь 
 		pr_q.push(newNode('\0', sum, left, right));
 	}
 
-	// Сохраним указатель на вершину (корень) дерева
+	// Сохраним указатель на вершину дерева
 	Node *root = pr_q.top();
 	
 	// map для сохранения кодов символов 
@@ -142,7 +143,7 @@ int main() {
 	// Выполняем декодирование
 	else if (did == 0) {
 		ifstream file_codes("bukv.txt");
-		// map для сохранения символов (коды символов передаём в качетсве ключа)
+		// map для сохранения символов 
 		unordered_map <string, char> bukv;
 
 		char ch = ' ';
