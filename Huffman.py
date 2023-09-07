@@ -1,6 +1,6 @@
 import heapq
 from collections import defaultdict
-
+import bitarray
 
 class HuffmanNode:
     def __init__(self, char, freq):
@@ -52,26 +52,27 @@ class Huffman:
                                         # и пустая строка передается в качестве начального кода
 
     def encode_file(self, input_file_path, output_file_path):
-        with open(input_file_path, 'r') as input_file, open(output_file_path, 'w') as output_file:
+        with open(input_file_path, 'r') as input_file, open(output_file_path, 'wb') as output_file:
             data = input_file.read()
-            encoded_data = ""
+            encoded_data = bitarray.bitarray()
             for char in data:
-                encoded_data += self.code_table[char]
-            output_file.write(encoded_data)
+                encoded_data += bitarray.bitarray(self.code_table[char])
+            encoded_data.tofile(output_file)
 
     def decode_file(self, input_file_path, output_file_path):
-        with open(input_file_path, 'r') as input_file, open(output_file_path, 'w') as output_file:
-            encoded_data = input_file.read()
+        with open(input_file_path, 'rb') as input_file, open(output_file_path, 'w') as output_file:
+            encoded_data = bitarray.bitarray()
+            encoded_data.fromfile(input_file)
             decoded_data = ""
             current_node = self.huffman_tree  # Устанавливаем текущий узел в корень дерева Хаффмана
             for bit in encoded_data:
-                if bit == '0':  # Если бит равен '0', переходим в левого потомка текущего узла
+                if bit == 0: # Если бит равен '0', переходим в левого потомка текущего узла
                     current_node = current_node.left
                 else:  # иначе в правого потомка текущего узла
                     current_node = current_node.right
                 if current_node.char:  # Если текущий узел является листом
-                    decoded_data += current_node.char   # добавляем его символ в раскодированную строку
-                    current_node = self.huffman_tree    # Возвращаемся в корень дерева Хаффмана
+                    decoded_data += current_node.char # добавляем его символ в раскодированную строку
+                    current_node = self.huffman_tree # Возвращаемся в корень дерева Хаффмана
             output_file.write(decoded_data)
 
 
