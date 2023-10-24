@@ -1,103 +1,198 @@
-from decimal import Decimal, getcontext
+import time
+import os
+from mpmath import *
+from collections import Counter
 
-class ArithmeticCoding:
-    def __init__(self):
-        self.frequencies = {}  # Создаём словарь для хранения частоты каждого символа
-        self.probabilities = {}  # Создаём словарь для хранения вероятности каждого символа
-        self.cumulative_probabilities = {}  # Создаём словарь для хранения накопленной вероятности каждого символа
-        self.low = Decimal(0)  # Устанавливаем нижнее значение low в десятичное число 0
-        self.high = Decimal(1)  # Устанавливаем верхнее значение high в десятичное число 1
-        self.precision = None  # Устанавливаем точность precision в None.
 
-    def compress(self, input_file, output_file):
-        with open(input_file, 'r') as file:
-            data = file.read()
+def arithmetic_encode(src):
+    max_val, third, qtr, half = 4294967295, 3221225472, 1073741824, 2147483648
 
-        self.calculate_frequencies(data)  # Подсчет частоты каждого символа в исходных данных
+    freq = Counter(src)
+    prob = {ch: cnt / len(src) for ch, cnt in freq.items()}
 
-        self.calculate_probabilities()  # Нормализация частоты символов
+    cum_freq = [0.0]
+    for p in prob.values():
+        cum_freq.append(cum_freq[-1] + p)
+    cum_freq.pop()
+    cum_freq = {k: v for k, v in zip(prob.keys(), cum_freq)}
 
-        self.calculate_cumulative_probabilities()  # Создание таблицы кумулятивных вероятностей
+    enc_nums = []
+    lb, ub = 0, max_val
+    strdl = 0
 
-        # Инициализация переменных для кодирования
-        self.low = Decimal(0)
-        self.high = Decimal(1)
-        self.precision = Decimal(10) ** -len(data)  # точность кодирования
+    for b in src:
+        rng = ub - lb + 1
+        lb += ceil(rng * cum_freq[b])
+        ub = lb + floor(rng * prob[b])
 
-        # Кодирование данных
-        for symbol in data:
-            range_width = self.high - self.low
-            self.low += range_width * Decimal(self.cumulative_probabilities[symbol][0])
-            self.high = self.low + range_width * Decimal(self.cumulative_probabilities[symbol][1])
-
-        with open(output_file, 'w') as file:
-            file.write(str((self.low + self.high) / 2) + '\n')
-            file.write(str(self.precision) + '\n')
-
-    def decompress(self, input_file, output_file):
-        with open(input_file, 'r') as file:
-            encoded_data = Decimal(file.readline())
-            precision = Decimal(file.readline())
-
-        # Инициализация переменных для декодирования
-        self.low = Decimal(0)
-        self.high = Decimal(1)
-        result = ""
-
-        # Декодирование данных
+        tmp_nums = []
         while True:
-            range_width = self.high - self.low
-            if range_width == 0:  # Проверка ширины диапазона и прерывание цикла, если ширина равна нулю
+            if ub < half:
+                tmp_nums.append(0)
+                tmp_nums.extend([1] * strdl)
+                strdl = 0
+            elif lb >= half:
+                tmp_nums.append(1)
+                tmp_nums.extend([0] * strdl)
+                strdl = 0
+                lb -= half
+                ub -= half
+            elif lb >= qtr and ub < third:
+                strdl += 1
+                lb -= qtr
+                ub -= qtr
+            else:
                 break
-            value = (encoded_data - self.low) / Decimal(range_width)  # Расчет значения на основе закодированных данных
-            # Поиск символа, соответствующего значению
-            symbol = None
-            for s, (start, end) in self.cumulative_probabilities.items():
-                if start <= value < end:
-                    symbol = s
-                    break
 
-            if symbol is None:  # Прерывание цикла, если символ не найден
+            if tmp_nums:
+                enc_nums.extend(tmp_nums)
+                tmp_nums = []
+
+            lb *= 2
+            ub = 2 * ub + 1
+
+    enc_nums.extend([0] + [1] * strdl if lb < qtr else [1] + [0] * strdl)
+
+    return enc_nums
+
+
+def arithmetic_decode(enc, prob, len_txt):
+    p, max_val, third, qtr, half = 32, 4294967295, 3221225472, 1073741824, 2147483648
+
+    alph = list(prob)
+    cum_freq = [0]
+    for i in prob:
+        cum_freq.append(cum_freq[-1] + prob[i])
+    cum_freq.pop()
+
+    prob = list(prob.values())
+
+    enc.extend(p * [0])
+    dec_sym = len_txt * [0]
+
+    cur_val = int(''.join(str(a) for a in enc[0:p]), 2)
+    bit_pos = p
+    lb, ub = 0, max_val
+
+    dec_pos = 0
+    while 1:
+        rng = ub - lb + 1
+        sym_idx = len(cum_freq)
+        val = (cur_val - lb) / rng
+        for i, item in enumerate(cum_freq):
+            if item >= val:
+                sym_idx = i
+                break
+        sym_idx -= 1
+        dec_sym[dec_pos] = alph[sym_idx]
+
+        lb = lb + ceil(cum_freq[sym_idx] * rng)
+        ub = lb + floor(prob[sym_idx] * rng)
+
+        while True:
+            if ub < half:
+                pass
+            elif lb >= half:
+                lb -= half
+                ub -= half
+                cur_val -= half
+            elif lb >= qtr and ub < third:
+                lb -= qtr
+                ub -= qtr
+                cur_val -= qtr
+            else:
                 break
 
-            result += symbol  # Добавление найденного символа к результату
+            lb *= 2
+            ub = 2 * ub + 1
+            cur_val = 2 * cur_val + enc[bit_pos]
+            bit_pos += 1
+            if bit_pos == len(enc) + 1:
+                break
 
-            # Обновление границ диапазона
-            self.low += range_width * Decimal(self.cumulative_probabilities[symbol][0])
-            self.high = self.low + range_width * Decimal(self.cumulative_probabilities[symbol][1])
-
-        with open(output_file, 'w') as file:
-            file.write(result)
-
-    def calculate_frequencies(self, data):  # Подсчет частоты каждого символа в исходных данных
-        self.frequencies = {}
-        for symbol in data:
-            if symbol in self.frequencies:  # Если символ уже есть в словаре, увеличиваем его частоту на 1
-                self.frequencies[symbol] += 1
-            else:  # иначе добавляем его и устанавливаем частоту в 1
-                self.frequencies[symbol] = 1
-
-    def calculate_probabilities(self):
-        # Здесь происходит нормализация частоты символов путем деления каждой частоты на общее число символов
-        total = sum(self.frequencies.values())
-        self.probabilities = {symbol: freq / total for symbol, freq in self.frequencies.items()}
-
-    def calculate_cumulative_probabilities(self):
-        # Создание таблицы кумулятивных вероятностей
-        cumulative_prob = 0
-        # Для каждого символа мы сохраняем диапазон вероятностей, в котором он может появиться
-        for symbol, probability in self.probabilities.items():
-            self.cumulative_probabilities[symbol] = (cumulative_prob, cumulative_prob + probability)
-            cumulative_prob += probability  # добавляем вероятность текущего символа
+        dec_pos += 1
+        if dec_pos == len_txt or bit_pos == len(enc) + 1:
+            break
+    return bytes(dec_sym)
 
 
+def encode(fn):
+    with open(fn, 'rb') as src:
+        inp = src.read()
 
-ac = ArithmeticCoding()
-input_file = 'inp.txt'
-output_file = 'out.txt'
+    freq = dict(Counter(inp))
 
-# Сжатие данных
-ac.compress(input_file, output_file)
+    enc_seq = arithmetic_encode(inp)
+    enc_seq_str = ''.join(map(str, enc_seq))
 
-# Декомпрессия данных
-ac.decompress(output_file, 'decompressed_' + input_file)
+    pad_cnt = 8 - len(enc_seq_str) % 8
+    enc_seq_str += "0" * pad_cnt
+
+    pad_info = "{0:08b}".format(pad_cnt)
+    pad_enc_str = pad_info + enc_seq_str
+
+    out_arr = bytearray([int(pad_enc_str[i:i + 8], 2) for i in range(0, len(pad_enc_str), 8)])
+
+    with open(f'{fn}.enc', 'wb') as enc_f:
+        enc_f.write(len(inp).to_bytes(4, 'little'))
+        enc_f.write((len(freq.keys()) - 1).to_bytes(1, 'little'))
+
+        for b_val, freq in freq.items():
+            enc_f.write(b_val.to_bytes(1, 'little'))
+            enc_f.write(freq.to_bytes(4, 'little'))
+
+        enc_f.write(bytes(out_arr))
+
+
+def decode(fn):
+    with open(fn, 'rb') as enc_f:
+        enc_data = enc_f.read()
+
+    orig_len = int.from_bytes(enc_data[0:4], 'little')
+    uniq_cnt = enc_data[4] + 1
+    hdr = enc_data[5: 5 * uniq_cnt + 5]
+
+    byte_freq = {}
+    for i in range(uniq_cnt):
+        b_val = hdr[i * 5]
+        freq = int.from_bytes(hdr[i * 5 + 1:i * 5 + 5], 'little')
+        byte_freq[b_val] = freq
+
+    probs = {ch: cnt / orig_len for ch, cnt in byte_freq.items()}
+
+    enc_txt = enc_data[5 * (enc_data[4] + 1) + 5:]
+    pad_enc_str = ''.join([bin(b)[2:].rjust(8, '0') for b in enc_txt])
+
+    pad_cnt = int(pad_enc_str[:8], 2)
+    enc_seq = pad_enc_str[8: -pad_cnt if pad_cnt != 0 else None]
+    enc_seq = [int(bit) for bit in enc_seq]
+
+    dec_data = arithmetic_decode(enc_seq, probs, orig_len)
+
+    with open(f'{fn}.dec', 'wb') as dec_f:
+        dec_f.write(dec_data)
+
+
+if __name__ == '__main__':
+
+    choice = input("Вы хотите кодировать(1) или декодировать(0) ваш файл: ")
+    file = input("Введите имя файла: ")
+
+    st = time.time()
+
+    if choice == '1':
+        encode(file)
+        et = time.time()
+        t = et - st
+
+        original_file_size = os.path.getsize(file)
+        compressed_file_size = os.path.getsize('out.txt')
+        compression_ratio = (original_file_size - compressed_file_size) / original_file_size * 100
+
+        print(f"Время кодирования: {t:.4f} сек.")
+        print(f"Процент сжатия: {compression_ratio:.2f}%")
+    elif choice == '0':
+        decode(file)
+        et = time.time()
+        t = et - st
+        print(f"Время декодирования: {t:.4f} сек.")
